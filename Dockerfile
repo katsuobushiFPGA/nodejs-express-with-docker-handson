@@ -9,14 +9,17 @@
 ARG NODE_VERSION=20.11.1
 ARG PNPM_VERSION=8.15.4
 
-FROM node:${NODE_VERSION}-alpine
+FROM node:${NODE_VERSION}
+
+# 目的のUID/GIDに変更する
+ARG USER_ID=1000
+ARG GROUP_ID=1000
 
 # Use production node environment by default.
 ENV NODE_ENV production
 
 # Install pnpm.
-RUN --mount=type=cache,target=/root/.npm \
-    npm install -g pnpm@${PNPM_VERSION}
+RUN npm install -g pnpm@${PNPM_VERSION}
 
 WORKDIR /usr/src/app
 
@@ -29,8 +32,17 @@ RUN --mount=type=bind,source=package.json,target=package.json \
     --mount=type=cache,target=/root/.local/share/pnpm/store \
     pnpm install --prod --frozen-lockfile
 
+RUN npx playwright install-deps
+
+# グループとユーザを作成し、所有権を変更する
+RUN groupmod --gid $GROUP_ID node && \
+    usermod --uid $USER_ID --gid $GROUP_ID node && \
+    chown -R node:node /usr/src/app
+
 # Run the application as a non-root user.
 USER node
+
+RUN npx playwright install
 
 # Copy the rest of the source files into the image.
 COPY . .
